@@ -61,35 +61,115 @@ def _fetch_pro_chain(provider, address, chain_id, session):
 
 
 def _fetch_public_chain(provider, address, chain_id):
-    # free public API: keyless but aggressively rate-limited -> spacing + retries
-    last = None
-    for attempt in range(3):
+    # free public API: fail fast if DeBank blocks keyless requests with HTTP 429/401/403
+    return http_get_json(
+        f"{provider['base_url']}/token/balance_list",
+        params={"user": address, "chain_id": chain_id, "is_all": "true"},
+        timeout=5, retries=0,
+    )
+
+
+PUBLIC_EVM_RPCS = (
+    ("eth", "ETH", "Ethereum", "https://ethereum-rpc.publicnode.com", "ethereum"),
+    ("arb", "ETH", "Arbitrum ETH", "https://arbitrum-one-rpc.publicnode.com", "ethereum"),
+    ("op", "ETH", "Optimism ETH", "https://optimism-rpc.publicnode.com", "ethereum"),
+    ("base", "ETH", "Base ETH", "https://base-rpc.publicnode.com", "ethereum"),
+    ("bsc", "BNB", "BNB", "https://bsc-rpc.publicnode.com", "bnb"),
+    ("matic", "POL", "Polygon POL", "https://polygon-bor-rpc.publicnode.com", "matic"),
+)
+
+
+def _fetch_public_rpc_fallback(wallet):
+    """Fast keyless multi-chain RPC fallback when DeBank Pro has no key and DeBank Public is 429-blocked."""
+    from .prices import get_native_prices
+    address = wallet["address"]
+    native = get_native_prices()
+    eth_price = native.get("ethereum") or 0.0
+    # Fetch BNB/POL spot price from Binance if needed
+    extra_prices = {"ethereum": eth_price, "bnb": 0.0, "matic": 0.0}
+    try:
+        d = http_get_json("https://api.binance.com/api/v3/ticker/price",
+                          params={"symbols": '["BNBUSDT","POLUSDT"]'}, timeout=5, retries=0)
+        for item in d or []:
+            if item.get("symbol") == "BNBUSDT":
+                extra_prices["bnb"] = float(item["price"])
+            elif item.get("symbol") == "POLUSDT":
+                extra_prices["matic"] = float(item["price"])
+    except Exception:  # noqa: BLE001
+        pass
+
+    rows = []
+    chain_totals = {}
+
+    def probe_chain(entry):
+        cid, sym, name, url, pkey = entry
         try:
-            return http_get_json(
-                f"{provider['base_url']}/token/balance_list",
-                params={"user": address, "chain_id": chain_id, "is_all": "true"},
-                timeout=20, retries=0,
-            )
-        except Exception as e:  # noqa: BLE001
-            last = e
-            time.sleep(2 + attempt * 2)
-    raise last
+            r = requests.post(
+                url,
+                json={"jsonrpc": "2.0", "id": 1, "method": "eth_getBalance", "params": [address, "latest"]},
+                timeout=5,
+            ).json()
+            wei = int(r.get("result") or "0x0", 16)
+            if wei <= 0:
+                return None
+            amount = wei / 1e18
+            price = extra_prices.get(pkey) or 0.0
+            usd = round(amount * price, 6)
+            return {
+                "wallet": wallet["name"],
+                "chain": cid,
+                "symbol": sym,
+                "name": name,
+                "amount": amount,
+                "price": price,
+                "usd": usd,
+                "logo": "",
+                "token_id": cid,
+                "protocol_id": "",
+                "is_verified": True,
+            }
+        except Exception:  # noqa: BLE001
+            return None
+
+    with ThreadPoolExecutor(max_workers=len(PUBLIC_EVM_RPCS)) as ex:
+        for row in ex.map(probe_chain, PUBLIC_EVM_RPCS):
+            if row:
+                rows.append(row)
+                chain_totals[row["chain"]] = round(chain_totals.get(row["chain"], 0.0) + row["usd"], 2)
+
+    return {
+        "wallet": wallet["name"],
+        "address": address,
+        "type": "evm",
+        "total_usd": round(sum(chain_totals.values()), 2),
+        "chain_totals": chain_totals,
+        "tokens": rows,
+        "chain_errors": [],
+        "provider_used": "publicnode-rpc",
+    }
 
 
 def _fetch_with_provider(provider, wallet, chains, max_workers):
     """Fetch all chains for one wallet with a given provider."""
     address = wallet["address"]
     ptype = provider.get("type", "pro")
+    if ptype == "pro" and not (provider.get("key") or "").strip():
+        raise RuntimeError("debank-pro: no AccessKey configured")
     results = {}
     errors = []
     if ptype == "public":
-        # sequential, rate-limit friendly
+        # Probe first chain; if keyless public endpoint is rate-limited (429), fail fast immediately
+        consecutive_fails = 0
         for cid in chains:
             try:
                 results[cid] = _fetch_public_chain(provider, address, cid)
+                consecutive_fails = 0
             except Exception as e:  # noqa: BLE001
                 errors.append(cid)
-            time.sleep(0.35)
+                consecutive_fails += 1
+                if consecutive_fails >= 2 and not results:
+                    raise RuntimeError(f"debank-public rate-limited: {e}") from e
+            time.sleep(0.2)
     else:
         workers = max_workers or config.MAX_EVM_WORKERS
         sessions = [requests.Session() for _ in range(workers)]
@@ -170,7 +250,10 @@ def fetch_evm_wallet(wallet, api_key=None, chains=None, max_workers=None):
     if not cfg.get("enabled", True):
         return {"wallet": wallet["name"], "address": wallet["address"], "type": "evm",
                 "total_usd": 0.0, "chain_totals": {}, "tokens": [], "chain_errors": []}
-    providers = cfg.get("providers") or []
+    providers = [p for p in (cfg.get("providers") or [])
+                 if p.get("enabled", True) and (p.get("type") != "pro" or (p.get("key") or "").strip())]
+    if not providers:
+        return _fetch_public_rpc_fallback(wallet)
     chains = chains or chain_ids()
     allowed = cfg.get("chains")
     if allowed:
@@ -186,7 +269,10 @@ def fetch_evm_wallet(wallet, api_key=None, chains=None, max_workers=None):
         result, used = sources.try_providers("debank", providers, fetch_one)
         result["provider_used"] = used.get("name", "")
         return result
-    except Exception as e:  # noqa: BLE001
-        return {"wallet": wallet["name"], "address": wallet["address"], "type": "evm",
-                "total_usd": 0.0, "chain_totals": {}, "tokens": [],
-                "chain_errors": ["all-providers"], "error": f"{type(e).__name__}: {e}"}
+    except Exception:  # noqa: BLE001
+        try:
+            return _fetch_public_rpc_fallback(wallet)
+        except Exception as e:  # noqa: BLE001
+            return {"wallet": wallet["name"], "address": wallet["address"], "type": "evm",
+                    "total_usd": 0.0, "chain_totals": {}, "tokens": [],
+                    "chain_errors": ["all-providers"], "error": f"{type(e).__name__}: {e}"}

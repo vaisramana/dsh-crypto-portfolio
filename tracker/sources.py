@@ -31,7 +31,7 @@ _DEFAULTS = {
             {"name": "debank-pro", "type": "pro", "key": "",
              "base_url": "https://pro-openapi.debank.com", "paid": True, "enabled": True},
             {"name": "debank-public", "type": "public", "key": "",
-             "base_url": "https://api.debank.com", "paid": False, "enabled": True},
+             "base_url": "https://api.debank.com", "paid": False, "enabled": False},
         ],
     },
     "btc": {
@@ -61,21 +61,21 @@ _DEFAULTS = {
     "prices": {
         "enabled": True,
         "providers": [
-            {"name": "coingecko", "type": "batch",
-             "url": "https://api.coingecko.com/api/v3/simple/price", "key": "", "enabled": True},
             {"name": "binance", "type": "batch",
              "url": "https://api.binance.com/api/v3/ticker/price", "enabled": True},
-            {"name": "coinbase", "type": "per_pair",
-             "url": "https://api.coinbase.com/v2/prices/{pair}-USD/spot", "enabled": True},
             {"name": "okx", "type": "per_pair",
              "url": "https://www.okx.com/api/v5/market/ticker", "enabled": True},
+            {"name": "coingecko", "type": "batch",
+             "url": "https://api.coingecko.com/api/v3/simple/price", "key": "", "enabled": True},
+            {"name": "coinbase", "type": "per_pair",
+             "url": "https://api.coinbase.com/v2/prices/{pair}-USD/spot", "enabled": True},
         ],
     },
     "solana": {
         "enabled": True,
         "rpc": [
+            {"name": "publicnode", "url": "https://solana-rpc.publicnode.com", "enabled": True},
             {"name": "mainnet-beta", "url": "https://api.mainnet-beta.solana.com", "enabled": True},
-            {"name": "ankr-public", "url": "https://rpc.ankr.com/solana", "enabled": True},
         ],
         "spl_prices": {
             "providers": [
@@ -100,7 +100,7 @@ _DEFAULTS = {
         ],
     },
     "etherscan": {
-        "enabled": True,
+        "enabled": False,
         "api_key": "",
         "chains": ["eth"],
     },

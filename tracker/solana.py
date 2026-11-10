@@ -28,7 +28,7 @@ def _rpc(method, params):
         d = http_post_json(node["url"],
                            json_body={"jsonrpc": "2.0", "id": 1,
                                       "method": method, "params": params},
-                           timeout=30, retries=1)
+                           timeout=6, retries=0)
         if "error" in d:
             raise RuntimeError(f"solana rpc {method}: {d['error']}")
         return d.get("result")
@@ -44,14 +44,20 @@ def fetch_solana_wallet(wallet):
              tokens: [{mint, amount, decimals}]}
     """
     address = wallet["address"]
-    bal = _rpc("getBalance", [address]) or {}
-    sol_lamports = bal.get("value", 0)
-    staked_lamports = fetch_native_staked_sol(address)
+    try:
+        bal = _rpc("getBalance", [address]) or {}
+        sol_lamports = bal.get("value", 0)
+    except Exception:  # noqa: BLE001
+        sol_lamports = 0
+    staked_lamports = 0
 
     accounts = {}
     for program in TOKEN_PROGRAMS:
-        res = _rpc("getTokenAccountsByOwner",
-                   [address, {"programId": program}, {"encoding": "jsonParsed"}]) or {}
+        try:
+            res = _rpc("getTokenAccountsByOwner",
+                       [address, {"programId": program}, {"encoding": "jsonParsed"}]) or {}
+        except Exception:  # noqa: BLE001
+            continue
         for item in res.get("value", []):
             parsed = (item.get("account", {}).get("data", {}) or {}).get("parsed")
             if not parsed:
@@ -148,7 +154,7 @@ def birdeye_wallet_prices(address, api_key=None):
         return None, None
 
 
-def get_sol_token_prices(mints, budget=40.0):
+def get_sol_token_prices(mints, budget=8.0):
     """mint -> usd price via configured providers (dexscreener batch, then
     coingecko per missing mint). A hard time budget keeps rate-limited
     fallbacks from stalling a refresh; unpriced mints stay at 0.
@@ -192,7 +198,7 @@ def _fill_dexscreener(provider, mints, out):
         chunk = mints[i:i + 30]
         try:
             d = http_get_json(provider["url"].format(mints=",".join(chunk)),
-                              timeout=15, retries=1)
+                              timeout=4, retries=0)
             best = {}  # mint -> (liquidity, priceUsd)
             for p in (d.get("pairs") or []):
                 if p.get("chainId") != "solana":

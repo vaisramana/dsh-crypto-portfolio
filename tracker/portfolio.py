@@ -190,13 +190,13 @@ def fetch_all(progress=None):
 
     # 5) CEX accounts (Binance / Bybit / Backpack)
     # Etherscan reference source: native balances, surfaced in Settings, not merged
-    try:
-        esc_detail, _esc_err = fetch_etherscan(evm_wallets, native)
-        if esc_detail:
-            status.mark_source_ok("etherscan")
-            status.set_detail("etherscan_native", esc_detail)
-    except Exception:  # noqa: BLE001
-        pass
+        try:
+            esc_detail, _esc_err = fetch_etherscan(evm_wallets, native)
+            if esc_detail:
+                status.mark_source_ok("etherscan")
+                status.set_detail("etherscan_native", esc_detail)
+        except Exception:  # noqa: BLE001
+            pass
 
     tick("cex", 0, 1, "Fetching CEX balances (Binance/Bybit/Backpack)…")
     cex_results = fetch_cex_accounts(cex_accounts(), native)
