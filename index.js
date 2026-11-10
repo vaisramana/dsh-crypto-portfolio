@@ -13,7 +13,12 @@ import { fileURLToPath } from 'node:url'
 export const name = 'dsh-crypto-portfolio'
 
 const ROOT = dirname(fileURLToPath(import.meta.url))
-const PYTHON = process.env.PORTFOLIO_PYTHON || 'python3'
+const HOME_DIR = process.env.HOME || '~'
+const DEFAULT_PYTHON = existsSync(join(HOME_DIR, 'miniconda3/bin/python3'))
+  ? join(HOME_DIR, 'miniconda3/bin/python3')
+  : 'python3'
+const PYTHON = process.env.PORTFOLIO_PYTHON || DEFAULT_PYTHON
+const DEFAULT_DATA_DIR = '~/data/memo/assets'
 
 /** Where the profiles (wallets, keys, snapshot DB) live.
  *
@@ -24,7 +29,7 @@ const PYTHON = process.env.PORTFOLIO_PYTHON || 'python3'
  * storing a user's portfolio in a cache directory.
  */
 function resolveDataDir(config) {
-  const configured = (config && config.dataDir) || process.env.PORTFOLIO_PROFILES_DIR
+  const configured = (config && config.dataDir) || process.env.PORTFOLIO_PROFILES_DIR || DEFAULT_DATA_DIR
   if (configured) return configured.replace(/^~(?=\/)/, process.env.HOME || '~')
   if (ROOT.includes(`${'node_modules'}`)) {
     const home = process.env.DSH_HOME || join(process.env.HOME || '.', '.dsh')

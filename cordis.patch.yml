@@ -10,4 +10,4 @@
         # Where profiles (wallets, API keys, snapshot DB) are stored. Leave empty to
         # use the plugin's own directory, or point it somewhere durable so a plugin
         # update cannot touch your data. Also honoured: PORTFOLIO_PROFILES_DIR.
-        dataDir: ""
+        dataDir: "~/data/memo/assets"

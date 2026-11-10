@@ -33,7 +33,7 @@ def _profiles_root():
     next update. Keeping the data outside the package is the difference between
     "upgrade" and "start over".
     """
-    override = (os.environ.get("PORTFOLIO_PROFILES_DIR") or "").strip()
+    override = (os.environ.get("PORTFOLIO_PROFILES_DIR") or "~/data/memo/assets").strip()
     if override:
         return os.path.abspath(os.path.expanduser(override))
     return os.path.join(_ROOT, "profiles")
