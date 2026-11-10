@@ -2725,6 +2725,9 @@ async function runSourceTest(btn) {
   btn.disabled = true;
   set("", t("testing"));
   try {
+    if (state.sourcesCfg) {
+      await postJSON("/api/sources", { config: state.sourcesCfg });
+    }
     const r = await postJSON("/api/sources/test", {
       target: btn.dataset.testTarget,
       name: btn.dataset.testName || null,
