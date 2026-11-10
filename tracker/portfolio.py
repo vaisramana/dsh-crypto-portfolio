@@ -85,8 +85,10 @@ def _sol_rows(sol_data_list, sol_usd, prices):
                          "logo": "", "token_id": "sol-staked"})
         for t in data["tokens"]:
             price = prices.get(t["mint"], 0)
-            rows.append({"wallet": wname, "chain": "sol", "symbol": t["mint"][:6] + "...",
-                         "name": t["mint"], "amount": t["amount"], "price": price,
+            sym = t.get("symbol") or (t["mint"][:6] + "...")
+            name = t.get("name") or t["mint"]
+            rows.append({"wallet": wname, "chain": "sol", "symbol": sym,
+                         "name": name, "amount": t["amount"], "price": price,
                          "usd": round(t["amount"] * price, 6), "logo": "",
                          "token_id": t["mint"]})
     return rows

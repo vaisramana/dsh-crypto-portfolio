@@ -75,15 +75,14 @@ _DEFAULTS = {
         "enabled": True,
         "rpc": [
             {"name": "publicnode", "url": "https://solana-rpc.publicnode.com", "enabled": True},
-            {"name": "mainnet-beta", "url": "https://api.mainnet-beta.solana.com", "enabled": True},
         ],
         "spl_prices": {
             "providers": [
                 {"name": "dexscreener", "type": "batch",
-                 "url": "https://api.dexscreener.com/latest/dex/tokens/{mints}", "enabled": True},
+                 "url": "https://api.dexscreener.com/latest/dex/tokens/{mints}", "enabled": False},
                 {"name": "coingecko", "type": "per_mint",
                  "url": "https://api.coingecko.com/api/v3/simple/token_price/solana",
-                 "key": "", "enabled": True},
+                 "key": "", "enabled": False},
             ],
         },
         "birdeye": {
